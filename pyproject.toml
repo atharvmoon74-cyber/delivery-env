@@ -1,0 +1,11 @@
+[project]
+name = "delivery-env"
+version = "0.1.0"
+description = "Smart delivery optimization environment"
+authors = [
+    {name = "Atharv Moon"}
+]
+dependencies = [
+    "fastapi",
+    "uvicorn"
+]
