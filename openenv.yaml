@@ -1,0 +1,35 @@
+name: delivery-env
+description: Smart Delivery Optimization Environment for RL agents
+
+version: 1.0
+
+entry_point: environment:DeliveryEnv
+
+tasks:
+  - id: easy
+    description: Deliver a single order efficiently
+    difficulty: easy
+
+  - id: medium
+    description: Deliver multiple orders with moderate complexity
+    difficulty: medium
+
+  - id: hard
+    description: Deliver multiple orders with time constraints and efficiency
+    difficulty: hard
+
+action_space:
+  type: discrete
+  n: 3
+  actions:
+    0: move_right
+    1: move_left
+    2: deliver_order
+
+observation_space:
+  type: dict
+  fields:
+    agent_position: int
+    pending_orders: list
+    steps_left: int
+    total_orders: int
