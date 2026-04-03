@@ -5,14 +5,11 @@ app = FastAPI()
 
 env = None
 
-
 @app.post("/reset")
 def reset():
     global env
     env = DeliveryEnv(difficulty="easy")
-    state = env.reset()
-    return state
-
+    return env.reset()
 
 @app.post("/step")
 def step(action: int):
@@ -23,7 +20,6 @@ def step(action: int):
         "reward": reward,
         "done": done
     }
-
 
 @app.get("/state")
 def state():
