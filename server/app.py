@@ -6,7 +6,7 @@ app = FastAPI()
 env = DeliveryEnv(difficulty="easy")
 
 
-@app.post("/reset")
+@app.get("/reset")
 def reset():
     global env
     env = DeliveryEnv(difficulty="easy")
