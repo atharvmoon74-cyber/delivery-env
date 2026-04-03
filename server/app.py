@@ -13,7 +13,7 @@ def reset():
     return env.reset()
 
 
-@app.post("/step")
+@app.get("/step")
 def step(action: int):
     state, reward, done = env.step(action)
     return {
