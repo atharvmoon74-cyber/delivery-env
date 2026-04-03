@@ -3,7 +3,8 @@ from environment import DeliveryEnv
 
 app = FastAPI()
 
-env = None
+env = DeliveryEnv(difficulty="easy")
+
 
 @app.post("/reset")
 def reset():
@@ -11,15 +12,16 @@ def reset():
     env = DeliveryEnv(difficulty="easy")
     return env.reset()
 
+
 @app.post("/step")
 def step(action: int):
-    global env
     state, reward, done = env.step(action)
     return {
         "state": state,
         "reward": reward,
         "done": done
     }
+
 
 @app.get("/state")
 def state():
