@@ -7,5 +7,9 @@ authors = [
 ]
 dependencies = [
     "fastapi",
-    "uvicorn"
+    "uvicorn",
+    "openenv-core>=0.2.0"
 ]
+
+[project.scripts]
+server = "server.app:app"
