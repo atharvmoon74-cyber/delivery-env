@@ -1,13 +1,12 @@
 from fastapi import FastAPI
+import uvicorn
 from environment import DeliveryEnv
 
 app = FastAPI()
 
-env = DeliveryEnv(difficulty="easy")
+env = None
 
 
-# SUPPORT BOTH GET + POST
-@app.get("/reset")
 @app.post("/reset")
 def reset():
     global env
@@ -15,9 +14,9 @@ def reset():
     return env.reset()
 
 
-@app.get("/step")
 @app.post("/step")
-def step(action: int = 0):
+def step(action: int):
+    global env
     state, reward, done = env.step(action)
     return {
         "state": state,
@@ -29,3 +28,13 @@ def step(action: int = 0):
 @app.get("/state")
 def state():
     return env.state()
+
+
+# 🔥 REQUIRED MAIN FUNCTION
+def main():
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+
+
+# 🔥 REQUIRED ENTRY POINT
+if __name__ == "__main__":
+    main()
