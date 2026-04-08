@@ -1,16 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI
 from environment import DeliveryEnv
 
 app = FastAPI()
+
 env = None
-
-class StepRequest(BaseModel):
-    action: int
-
-@app.get("/")
-def root():
-    return {"message": "DeliveryEnv API is running"}
 
 @app.post("/reset")
 def reset():
@@ -19,11 +12,9 @@ def reset():
     return env.reset()
 
 @app.post("/step")
-def step(req: StepRequest):
+def step(action: int):
     global env
-    if env is None:
-        raise HTTPException(status_code=400, detail="Environment not initialized. Call /reset first.")
-    state, reward, done = env.step(req.action)
+    state, reward, done = env.step(action)
     return {
         "state": state,
         "reward": reward,
@@ -32,7 +23,4 @@ def step(req: StepRequest):
 
 @app.get("/state")
 def state():
-    global env
-    if env is None:
-        raise HTTPException(status_code=400, detail="Environment not initialized. Call /reset first.")
     return env.state()
