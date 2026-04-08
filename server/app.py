@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from environment import DeliveryEnv
 
 app = FastAPI()
-
 env = None
 
 class StepRequest(BaseModel):
