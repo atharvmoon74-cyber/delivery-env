@@ -24,16 +24,19 @@ Actions:
 Current state:
 {json.dumps(state)}
 
-Return only one number: 0, 1, or 2.
+Rules:
+- Return ONLY one number: 0, 1, or 2
+- No explanation
+- Try to deliver all pending orders efficiently
 """
 
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=[
             {"role": "system", "content": "You are a delivery optimization agent."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ],
-        temperature=0
+        temperature=0,
     )
 
     text = response.choices[0].message.content.strip()
@@ -47,21 +50,48 @@ Return only one number: 0, 1, or 2.
 
     return 0
 
+
 def run_episode(difficulty="easy"):
     env = DeliveryEnv(difficulty=difficulty)
     state = env.reset()
 
     total_reward = 0
+    step_count = 0
     done = False
+
+    print("[START]")
+    print(f"Difficulty: {difficulty}")
+    print(f"Initial State: {state}")
 
     while not done:
         action = choose_action(state)
-        state, reward, done = env.step(action)
+        next_state, reward, done = env.step(action)
+
+        print("[STEP]")
+        print(f"Step: {step_count}")
+        print(f"Action: {action}")
+        print(f"State: {next_state}")
+        print(f"Reward: {reward}")
+        print(f"Done: {done}")
+
         total_reward += reward
+        state = next_state
+        step_count += 1
+
+    print("[END]")
+    print(f"Total Reward: {total_reward}")
+    print(f"Total Steps: {step_count}")
+    print("=" * 40)
 
     return total_reward
 
+
 if __name__ == "__main__":
+    scores = {}
+
     for difficulty in ["easy", "medium", "hard"]:
-        score = run_episode(difficulty)
-        print(f"{difficulty}: {score}")
+        scores[difficulty] = run_episode(difficulty)
+
+    print("\nFINAL SCORES:")
+    for k, v in scores.items():
+        print(f"{k}: {v}")
