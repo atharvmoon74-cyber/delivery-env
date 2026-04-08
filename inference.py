@@ -45,11 +45,10 @@ Rules:
         action = int(text)
         if action in [0, 1, 2]:
             return action
-    except:
+    except Exception:
         pass
 
     return 0
-
 
 def run_episode(difficulty="easy"):
     env = DeliveryEnv(difficulty=difficulty)
@@ -84,7 +83,6 @@ def run_episode(difficulty="easy"):
     print("=" * 40)
 
     return total_reward
-
 
 if __name__ == "__main__":
     scores = {}
