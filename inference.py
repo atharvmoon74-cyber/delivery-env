@@ -17,7 +17,6 @@ VALID_ACTIONS = {0, 1, 2}
 
 
 def clamp_score(value: float) -> float:
-    # Strictly inside (0, 1)
     if value <= 0.0:
         return 0.01
     if value >= 1.0:
@@ -35,26 +34,27 @@ def fallback_action(state: Dict[str, Any]) -> int:
     target = pending_orders[0]
 
     if agent_pos < target:
-        return 0
+        return 0  # move_right
     elif agent_pos > target:
-        return 1
-    return 2
+        return 1  # move_left
+    else:
+        return 2  # deliver_order
 
 
 def parse_action(text: str, state: Dict[str, Any]) -> int:
     if not text:
         return fallback_action(state)
 
-    text = text.strip()
+    cleaned = text.strip()
 
     try:
-        action = int(text)
+        action = int(cleaned)
         if action in VALID_ACTIONS:
             return action
     except Exception:
         pass
 
-    for ch in text:
+    for ch in cleaned:
         if ch in {"0", "1", "2"}:
             return int(ch)
 
@@ -73,7 +73,7 @@ Actions:
 Current state:
 {json.dumps(state)}
 
-Return only one digit: 0, 1, or 2.
+Return ONLY one digit: 0, 1, or 2.
 """.strip()
 
     try:
@@ -98,45 +98,86 @@ Return only one digit: 0, 1, or 2.
         return fallback_action(state)
 
 
-def run_episode(difficulty: str) -> float:
-    env = DeliveryEnv(difficulty=difficulty)
+def reward_to_score(total_reward: float, difficulty: str) -> float:
+    # Maps raw reward safely into (0, 1)
+    # Typical good run gives positive reward; bad run can be negative.
+    offset_map = {
+        "easy": 20.0,
+        "medium": 25.0,
+        "hard": 30.0,
+    }
+    scale_map = {
+        "easy": 60.0,
+        "medium": 70.0,
+        "hard": 80.0,
+    }
+
+    offset = offset_map.get(difficulty, 25.0)
+    scale = scale_map.get(difficulty, 70.0)
+
+    raw = (total_reward + offset) / scale
+    return clamp_score(raw)
+
+
+def run_episode(task_name: str) -> float:
+    env = DeliveryEnv(difficulty=task_name)
 
     try:
         state = env.reset()
     except Exception:
+        print(f"[START] task={task_name}", flush=True)
+        print(f"[END] task={task_name} score=0.01 steps=0", flush=True)
         return 0.01
 
-    total_reward = 0
-    step_count = 0
-    max_steps = 100
-    done = False
+    print(f"[START] task={task_name}", flush=True)
 
-    while not done and step_count < max_steps:
+    total_reward = 0.0
+    step_count = 0
+    done = False
+    max_guard_steps = 100
+
+    while not done and step_count < max_guard_steps:
         action = choose_action(state)
 
         try:
-            state, reward, done = env.step(action)
+            next_state, reward, done = env.step(action)
         except Exception:
-            return 0.01
+            score = 0.01
+            print(
+                f"[STEP] task={task_name} step={step_count + 1} action={action} reward=0 done=true",
+                flush=True,
+            )
+            print(
+                f"[END] task={task_name} score={score:.4f} steps={step_count}",
+                flush=True,
+            )
+            return score
 
-        total_reward += reward
         step_count += 1
+        total_reward += reward
+        state = next_state
 
-    # Safe score mapping guaranteed inside (0,1)
-    # Keep it simple and validator-safe
-    raw_score = 0.5 + (total_reward / 200.0)
-    return clamp_score(raw_score)
+        reward_value = float(reward)
+        done_str = "true" if done else "false"
+
+        print(
+            f"[STEP] task={task_name} step={step_count} action={action} reward={reward_value:.2f} done={done_str}",
+            flush=True,
+        )
+
+    score = reward_to_score(total_reward, task_name)
+
+    print(
+        f"[END] task={task_name} score={score:.4f} steps={step_count}",
+        flush=True,
+    )
+
+    return score
 
 
 def main() -> None:
-    scores = {
-        "easy": run_episode("easy"),
-        "medium": run_episode("medium"),
-        "hard": run_episode("hard"),
-    }
-
-    # Print only clean machine-readable output
-    print(json.dumps(scores))
+    for task_name in ["easy", "medium", "hard"]:
+        run_episode(task_name)
 
 
 if __name__ == "__main__":
