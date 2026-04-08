@@ -1,10 +1,8 @@
 name: delivery-env
 description: Smart delivery optimization environment
-
 version: 1.0
 
-entrypoint:
-  url: http://localhost:7860
+entrypoint: server
 
 endpoints:
   reset: /reset
