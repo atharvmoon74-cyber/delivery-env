@@ -3,15 +3,15 @@ name = "delivery-env"
 version = "0.1.0"
 description = "Smart delivery optimization environment"
 authors = [
-    {name = "Atharv Moon"}
+    { name = "Atharv Moon" }
 ]
 dependencies = [
-    "fastapi",
-    "uvicorn",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
     "openenv-core>=0.2.0",
     "openai>=1.0.0",
-    "pydantic"
+    "pydantic>=2.0.0"
 ]
 
 [project.scripts]
-server = "app:app"
+server = "server.app:main"
