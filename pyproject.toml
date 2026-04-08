@@ -13,3 +13,19 @@ dependencies = [
 
 [project.scripts]
 server = "server.app:main"
+[project]
+name = "delivery-env"
+version = "0.1.0"
+description = "Smart delivery optimization environment"
+authors = [
+    {name = "Atharv Moon"}
+]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "openenv-core>=0.2.0",
+    "openai>=1.0.0"
+]
+
+[project.scripts]
+server = "app:app"
