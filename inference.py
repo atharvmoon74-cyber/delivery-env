@@ -1,5 +1,6 @@
 import os
 import json
+from typing import Any, Dict, List
 from openai import OpenAI
 from environment import DeliveryEnv
 
@@ -12,11 +13,61 @@ client = OpenAI(
     api_key=API_KEY,
 )
 
-def choose_action(state):
+VALID_ACTIONS = {0, 1, 2}
+
+
+def fallback_action(state: Dict[str, Any]) -> int:
+    """
+    Safe deterministic fallback policy.
+    Moves toward the first pending order and delivers when on target.
+    """
+    agent_pos = state.get("agent_pos", 0)
+    pending_orders: List[int] = state.get("pending_orders", [])
+
+    if not pending_orders:
+        return 2
+
+    target = pending_orders[0]
+
+    if agent_pos < target:
+        return 0  # move right
+    if agent_pos > target:
+        return 1  # move left
+    return 2      # deliver
+
+
+def parse_action(text: str, state: Dict[str, Any]) -> int:
+    """
+    Extract a valid action from model text safely.
+    """
+    if not text:
+        return fallback_action(state)
+
+    cleaned = text.strip()
+
+    try:
+        action = int(cleaned)
+        if action in VALID_ACTIONS:
+            return action
+    except Exception:
+        pass
+
+    for ch in cleaned:
+        if ch in {"0", "1", "2"}:
+            return int(ch)
+
+    return fallback_action(state)
+
+
+def choose_action(state: Dict[str, Any]) -> int:
+    """
+    Ask the LLM for the next action.
+    Never raises an exception.
+    """
     prompt = f"""
 You are controlling a delivery agent in a 1D grid world.
 
-Actions:
+Available actions:
 0 = move_right
 1 = move_left
 2 = deliver_order
@@ -26,45 +77,76 @@ Current state:
 
 Rules:
 - Return ONLY one number: 0, 1, or 2
-- No explanation
-- Try to deliver all pending orders efficiently
-"""
-
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": "You are a delivery optimization agent."},
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0,
-    )
-
-    text = response.choices[0].message.content.strip()
+- Do not explain
+- Be efficient
+""".strip()
 
     try:
-        action = int(text)
-        if action in [0, 1, 2]:
-            return action
-    except Exception:
-        pass
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a delivery optimization agent. Reply with only one digit: 0, 1, or 2."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                },
+            ],
+            temperature=0,
+            max_tokens=5,
+        )
+    except Exception as e:
+        print(f"[WARNING] API call failed: {e}")
+        return fallback_action(state)
 
-    return 0
+    try:
+        text = response.choices[0].message.content
+    except Exception as e:
+        print(f"[WARNING] Could not read model response: {e}")
+        return fallback_action(state)
 
-def run_episode(difficulty="easy"):
+    try:
+        return parse_action(text, state)
+    except Exception as e:
+        print(f"[WARNING] Could not parse model action: {e}")
+        return fallback_action(state)
+
+
+def run_episode(difficulty: str = "easy") -> int:
+    """
+    Run one full episode safely.
+    """
     env = DeliveryEnv(difficulty=difficulty)
-    state = env.reset()
+
+    try:
+        state = env.reset()
+    except Exception as e:
+        print(f"[ERROR] env.reset failed for {difficulty}: {e}")
+        return -999
 
     total_reward = 0
     step_count = 0
+    max_guard_steps = 200
     done = False
 
     print("[START]")
     print(f"Difficulty: {difficulty}")
     print(f"Initial State: {state}")
 
-    while not done:
-        action = choose_action(state)
-        next_state, reward, done = env.step(action)
+    while not done and step_count < max_guard_steps:
+        try:
+            action = choose_action(state)
+        except Exception as e:
+            print(f"[WARNING] choose_action crashed unexpectedly: {e}")
+            action = fallback_action(state)
+
+        try:
+            next_state, reward, done = env.step(action)
+        except Exception as e:
+            print(f"[ERROR] env.step failed: {e}")
+            break
 
         print("[STEP]")
         print(f"Step: {step_count}")
@@ -77,6 +159,9 @@ def run_episode(difficulty="easy"):
         state = next_state
         step_count += 1
 
+    if step_count >= max_guard_steps:
+        print("[WARNING] Max guard steps reached, stopping episode.")
+
     print("[END]")
     print(f"Total Reward: {total_reward}")
     print(f"Total Steps: {step_count}")
@@ -84,12 +169,21 @@ def run_episode(difficulty="easy"):
 
     return total_reward
 
-if __name__ == "__main__":
+
+def main() -> None:
     scores = {}
 
     for difficulty in ["easy", "medium", "hard"]:
-        scores[difficulty] = run_episode(difficulty)
+        try:
+            scores[difficulty] = run_episode(difficulty)
+        except Exception as e:
+            print(f"[ERROR] Episode crashed for {difficulty}: {e}")
+            scores[difficulty] = -999
 
     print("\nFINAL SCORES:")
-    for k, v in scores.items():
-        print(f"{k}: {v}")
+    for difficulty, score in scores.items():
+        print(f"{difficulty}: {score}")
+
+
+if __name__ == "__main__":
+    main()
