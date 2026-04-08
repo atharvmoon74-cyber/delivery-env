@@ -1,5 +1,6 @@
 import os
 import json
+import math
 from typing import Any, Dict, List
 from openai import OpenAI
 from environment import DeliveryEnv
@@ -19,7 +20,7 @@ VALID_ACTIONS = {0, 1, 2}
 def fallback_action(state: Dict[str, Any]) -> int:
     """
     Safe deterministic fallback policy.
-    Moves toward the first pending order and delivers when on target.
+    Move toward the first pending order and deliver when on target.
     """
     agent_pos = state.get("agent_pos", 0)
     pending_orders: List[int] = state.get("pending_orders", [])
@@ -31,14 +32,15 @@ def fallback_action(state: Dict[str, Any]) -> int:
 
     if agent_pos < target:
         return 0  # move right
-    if agent_pos > target:
+    elif agent_pos > target:
         return 1  # move left
-    return 2      # deliver
+    else:
+        return 2  # deliver
 
 
 def parse_action(text: str, state: Dict[str, Any]) -> int:
     """
-    Extract a valid action from model text safely.
+    Parse model output safely into action 0/1/2.
     """
     if not text:
         return fallback_action(state)
@@ -61,8 +63,8 @@ def parse_action(text: str, state: Dict[str, Any]) -> int:
 
 def choose_action(state: Dict[str, Any]) -> int:
     """
-    Ask the LLM for the next action.
-    Never raises an exception.
+    Ask LLM for next action.
+    Never crashes.
     """
     prompt = f"""
 You are controlling a delivery agent in a 1D grid world.
@@ -77,7 +79,7 @@ Current state:
 
 Rules:
 - Return ONLY one number: 0, 1, or 2
-- Do not explain
+- No explanation
 - Be efficient
 """.strip()
 
@@ -92,7 +94,7 @@ Rules:
                 {
                     "role": "user",
                     "content": prompt
-                },
+                }
             ],
             temperature=0,
             max_tokens=5,
@@ -104,19 +106,46 @@ Rules:
     try:
         text = response.choices[0].message.content
     except Exception as e:
-        print(f"[WARNING] Could not read model response: {e}")
+        print(f"[WARNING] Could not read response: {e}")
         return fallback_action(state)
 
     try:
         return parse_action(text, state)
     except Exception as e:
-        print(f"[WARNING] Could not parse model action: {e}")
+        print(f"[WARNING] Could not parse action: {e}")
         return fallback_action(state)
 
 
-def run_episode(difficulty: str = "easy") -> int:
+def normalize_score(total_reward: float, difficulty: str) -> float:
     """
-    Run one full episode safely.
+    Convert raw reward to a score strictly between 0 and 1.
+    Uses sigmoid-like mapping and clamps away from exact 0 and 1.
+    """
+    scale_map = {
+        "easy": 10.0,
+        "medium": 12.0,
+        "hard": 15.0,
+    }
+
+    scale = scale_map.get(difficulty, 12.0)
+
+    score = 1.0 / (1.0 + math.exp(-total_reward / scale))
+
+    # strict clamp so score is never exactly 0 or 1
+    eps = 1e-6
+    if score <= 0.0:
+        score = eps
+    elif score >= 1.0:
+        score = 1.0 - eps
+
+    # extra safe clamp
+    score = max(eps, min(1.0 - eps, score))
+    return score
+
+
+def run_episode(difficulty: str = "easy") -> float:
+    """
+    Run one episode and return normalized score in (0, 1).
     """
     env = DeliveryEnv(difficulty=difficulty)
 
@@ -124,7 +153,7 @@ def run_episode(difficulty: str = "easy") -> int:
         state = env.reset()
     except Exception as e:
         print(f"[ERROR] env.reset failed for {difficulty}: {e}")
-        return -999
+        return 0.000001
 
     total_reward = 0
     step_count = 0
@@ -139,7 +168,7 @@ def run_episode(difficulty: str = "easy") -> int:
         try:
             action = choose_action(state)
         except Exception as e:
-            print(f"[WARNING] choose_action crashed unexpectedly: {e}")
+            print(f"[WARNING] choose_action crashed: {e}")
             action = fallback_action(state)
 
         try:
@@ -167,7 +196,8 @@ def run_episode(difficulty: str = "easy") -> int:
     print(f"Total Steps: {step_count}")
     print("=" * 40)
 
-    return total_reward
+    final_score = normalize_score(total_reward, difficulty)
+    return final_score
 
 
 def main() -> None:
@@ -178,11 +208,11 @@ def main() -> None:
             scores[difficulty] = run_episode(difficulty)
         except Exception as e:
             print(f"[ERROR] Episode crashed for {difficulty}: {e}")
-            scores[difficulty] = -999
+            scores[difficulty] = 0.000001
 
     print("\nFINAL SCORES:")
     for difficulty, score in scores.items():
-        print(f"{difficulty}: {score}")
+        print(f"{difficulty}: {score:.6f}")
 
 
 if __name__ == "__main__":
